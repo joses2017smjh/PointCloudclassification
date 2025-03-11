@@ -1,11 +1,14 @@
+# to the best of my abilities, working implementation of pointnet
+# https://arxiv.org/pdf/1612.00593
+
 import torch
 
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 
-device = "cuda"
-
+# change to your device
+device = "mps"
 
 class PointNetClassificationLoss(nn.Module):
     def __init__(self, reg_weight):
