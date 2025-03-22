@@ -8,7 +8,7 @@ import torch.nn.functional as F
 import torch.optim as optim
 
 # change to your device
-device = "mps"
+device = "cuda"
 
 class PointNetClassificationLoss(nn.Module):
     def __init__(self, reg_weight):

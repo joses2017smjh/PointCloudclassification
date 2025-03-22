@@ -10,7 +10,7 @@ import torch.optim as optim
 import math
 
 # change to your device
-device = "mps"
+device = "cuda"
 
 class TransformerLayer(nn.Module):
     def __init__(self, features):
@@ -30,14 +30,16 @@ class TransformerLayer(nn.Module):
         # positional encoding
         self.pos_enc = nn.Sequential(
             nn.Conv1d(in_channels=3, out_channels=features, kernel_size=1),
+            nn.BatchNorm1d(features),
             nn.ReLU(),
-            nn.Conv1d(in_channels=features, out_channels=features, kernel_size=1))
+            nn.Conv1d(in_channels=features, out_channels=features, kernel_size=1),
+            nn.BatchNorm1d(features),
+            nn.ReLU())
     
     def forward(self, x, p):
 
         # positional encoding
         x += self.pos_enc(p.transpose(2, 1)).transpose(2, 1)
-
 
         x_query = self.key(x)
         x_key = self.query(x)
@@ -45,11 +47,11 @@ class TransformerLayer(nn.Module):
 
         # attention scores
         # use scalar attention, paper uses vector attention
-        x = torch.matmul(x_query, x_key.transpose(2,1)) / math.sqrt(self.features)
+        x = torch.bmm(x_query, x_key.transpose(2,1)) / math.sqrt(self.features)
 
         # softmax on attention, apply as linear transformation
         x = F.softmax(x, dim=-1)
-        x = torch.matmul(x, x_value)
+        x = torch.bmm(x, x_value)
 
         return x
 
@@ -77,6 +79,9 @@ class PointTransformer(nn.Module):
         residual = x
         
         x = self.fcl1(x)
+
+        # layer normalization
+        x = torch.layer_norm(x, normalized_shape=[x.shape[-1]])
         
         # multihead attention
         x_1 = self.head1(x.clone(), p)
@@ -88,10 +93,13 @@ class PointTransformer(nn.Module):
         x = torch.concat([x_1, x_2, x_3, x_4], dim=-1)
         x = self.fcl_multihead(x)
 
+        # layer normalization
+        x = torch.layer_norm(x, normalized_shape=[x.shape[-1]])
+
         x = self.fcl2(x)
         
         # layer normalization
-        x = torch.layer_norm(x, normalized_shape=[x.shape[2]])
+        x = torch.layer_norm(x, normalized_shape=[x.shape[-1]])
 
         return x + residual, p
 
@@ -102,11 +110,11 @@ class TransitionDown(nn.Module):
         # shared multilayer perceptrion
         self.mlp = nn.Sequential(
             nn.Conv1d(in_channels=features, out_channels=features*2, kernel_size=1),
-            nn.ReLU(),
             nn.BatchNorm1d(features*2),
-            nn.Conv1d(in_channels=features*2, out_channels=features*2, kernel_size=1),
             nn.ReLU(),
-            nn.BatchNorm1d(features*2))
+            nn.Conv1d(in_channels=features*2, out_channels=features*2, kernel_size=1),
+            nn.BatchNorm1d(features*2),
+            nn.ReLU())
     
     def forward(self, x, p):
 
@@ -145,6 +153,9 @@ class PointTransformerBackbone(nn.Module):
         p = x
         x = self.init_linear(x)
 
+        # layer normalization
+        x = torch.layer_norm(x, normalized_shape=[x.shape[-1]])
+
         x, p = self.transformer1(x, p)
         x, p = self.down1(x, p)
         x, p = self.transformer2(x, p)
@@ -173,6 +184,7 @@ class PointTransformerClassifier(nn.Module):
             nn.Linear(in_features=512, out_features=256),
             nn.BatchNorm1d(256),
             nn.ReLU(),
+            nn.Dropout(p=0.3),
             nn.Linear(in_features=256, out_features=num_classes))
 
     def forward(self, x):

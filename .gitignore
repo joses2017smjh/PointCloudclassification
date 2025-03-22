@@ -22,6 +22,12 @@ wheels/
 .installed.cfg
 *.egg
 data/
+pointnet_modelnet10/
+pointnet_modelnet40/
+pointtransformer_modelnet10/
+pointtransformer_modelnet40/
+pytorch3d/
+
 
 # Virtual Environment
 .venv/
